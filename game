@@ -1,0 +1,157 @@
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <thread>
+#include<cstdlib>
+
+int** creation_mas_lives() { //инициализация массива. 1 - жив клеткаб 0 - мерт клетка. ин-ция из данного файла
+	int rows{};
+	int cols{};
+
+	std::ifstream start_f("start.txt");
+	if (!start_f.is_open()) {
+		std::cout << "File can't be open!"; //проверяем открылся ли файл
+	}
+	start_f >> rows >> cols;
+
+	int** mas_lives = new int* [rows] {}; //создание массива
+	for (int i = 0; i < rows; ++i) {
+		mas_lives[i] = new int[cols] {};
+	}
+	while (!start_f.eof()) {
+		int n_rows{};
+		int n_cols{};
+		start_f >> n_rows >> n_cols;
+		mas_lives[n_rows][n_cols] = 1; //заполнения живых клеток
+	}
+	start_f.close();
+	return mas_lives;
+}
+int** creation_universe(int rows, int cols) { //создание массива, где дальше каждое значение клетки будет указывать сколько у нее живых соседей
+	int** universe = new int* [rows] {};
+	for (int i = 0; i < rows; ++i) {
+		universe[i] = new int[cols] {}; //пока инициализируем нулями
+	}
+	return universe;
+}
+void recalculation(int** mas_lives, int** universe, int rows, int cols) { //считаем сколько у кажлой клетки живых соседей
+	//считаем угловые клетки
+	universe[0][0] = mas_lives[0][1] + mas_lives[1][0] + mas_lives[1][1];
+	universe[0][cols - 1] = mas_lives[0][cols - 2] + mas_lives[1][cols - 2] + mas_lives[1][cols - 1];
+	universe[rows - 1][cols - 1] = mas_lives[rows - 1][cols - 2] + mas_lives[rows - 2][cols - 2] + mas_lives[rows - 2][cols - 1];
+	universe[rows - 1][0] = mas_lives[rows - 2][0] + mas_lives[rows - 2][1] + mas_lives[rows - 1][1];
+
+	//считаем периметр
+	for (int r = 1; r < rows - 1; ++r) {
+		universe[r][0] = mas_lives[r - 1][0] + mas_lives[r + 1][0] + mas_lives[r - 1][1] + mas_lives[r][1] + mas_lives[r + 1][1];
+		universe[r][cols - 1] = mas_lives[r - 1][cols - 1] + mas_lives[r + 1][cols - 1] + mas_lives[r - 1][cols - 2] + mas_lives[r][cols - 2] + mas_lives[r + 1][cols - 2];
+	}
+	for (int l = 1; l < cols - 1; ++l) {
+		universe[0][l] = mas_lives[0][l - 1] + mas_lives[0][l + 1] + mas_lives[1][l - 1] + mas_lives[1][l] + mas_lives[1][l + 1];
+		universe[rows - 1][l] = mas_lives[rows - 1][l - 1] + mas_lives[rows - 1][l + 1] + mas_lives[rows - 2][l - 1] + mas_lives[rows - 2][l] + mas_lives[rows - 2][l + 1];
+	}
+	//считаем серединку
+	for (int i = 1; i < rows - 1; ++i) {
+		for (int j = 1; j < cols - 1; ++j) {
+			universe[i][j] = mas_lives[i - 1][j - 1] + mas_lives[i - 1][j] + mas_lives[i - 1][j + 1] + \
+				mas_lives[i][j - 1] + mas_lives[i][j + 1] + mas_lives[i + 1][j - 1] + mas_lives[i + 1][j] + mas_lives[i + 1][j + 1];
+		}
+	}
+	return;
+}
+
+
+bool generation(int** mas_lives, int** universe, int rows, int cols) {//процесс рождения и умирания клеток
+	int count_change{};//счетчик изменений состояния вселенной
+	int count_lives{}; //счетчик живых клеток
+	for (int i = 0; i < rows; i++) {
+		for (int j = 0; j < cols; j++) {
+			if (mas_lives[i][j] == 1) {
+				count_lives++; //подсчитыываем живые клетки
+			}
+			if (universe[i][j] == 3 && mas_lives[i][j] == 0) { //условие рождение клетки
+				mas_lives[i][j] = 1;
+				count_change++;
+			}
+			if (mas_lives[i][j] == 1 && (universe[i][j] < 2 || universe[i][j] > 3)) { //условие сметри клетки
+				mas_lives[i][j] = 0;
+				count_change++;
+			}
+		}
+	}
+	if (count_change == 0 || count_lives == 0) {
+		return false; //если нет живых клеток или вселенная статична - возвращаем false
+	}
+	return true;
+}
+
+int print_console(int** mas, int rows, int cols) {//выводит текущее состояние вселенной в консоль, считает живые клетки
+	int alive_cells{};
+	for (int i = 0; i < rows; ++i) {
+		for (int j = 0; j < cols; ++j) {
+			if (mas[i][j] == 1) {
+				std::cout << "* ";
+				alive_cells++;
+			}
+			else std::cout << "- ";
+		}
+		std::cout << std::endl;
+	}
+	return alive_cells;//возвращает кол-во живых клеток для вовода
+}
+
+void clean_mas(int** mas, int rows, int cols) {
+	for (int i = 0; i < rows; ++i) {
+		delete[] mas[i];
+	}
+	delete[] mas;
+
+}
+
+int main() {
+	int rows{};
+	int cols{};
+	 
+	int count_generation{}; //номер поколения
+	int count_cells{}; //кол-во живых клеток
+
+	std::ifstream start_f("start.txt");
+	if (!start_f.is_open()) {
+		std::cout << "File can't be open!";
+	}
+	start_f >> rows >> cols; //считываем кол-во строк и столбцов из файла
+	start_f.close();
+
+	int** mas_lives = creation_mas_lives(); //создаем массив, где 1 - жив клетка, 0 - метрв клетка
+	int** universe = creation_universe( rows, cols); //создание массива из 0 в котором потом будут считаться соседи для каждой клетки
+	
+	do {
+		//system("cls"); //очищение консоли 
+		//std::system("cls");
+		std::system("clear");
+		count_generation++; //подсчет поколения
+		recalculation(mas_lives, universe, rows, cols); //пересчитываем кол-во соседей для каждой клетки
+		count_cells = print_console(mas_lives, rows, cols); //выводим текущее состояние вселенной и считаем кол-во живых клеток
+		std::cout << "Generation: " << count_generation << ". Alive cells: " << count_cells << "." << std::endl; 
+		std::this_thread::sleep_for(std::chrono::seconds(1)); //задержка
+	}
+
+	 while (generation(mas_lives, universe, rows, cols)); //выполняем пока есть живые клетки и вселенная не статична
+	
+	
+	if (count_cells == 0) {
+		std::cout << "All cells are dead. Game over..." << std::endl; 
+	}
+	else {
+		//system("cls");
+		//std::system("cls");
+		count_generation++;
+		count_cells = print_console(mas_lives, rows, cols); //выводим текущее состояние вселенной и считаем кол-во живых клеток
+		std::cout << "Generation: " << count_generation << ". Alive cells: " << count_cells << "." << std::endl;
+		std::cout << "The world has stagnated. Game over..." << std::endl;
+	
+	}
+	clean_mas(mas_lives, rows, cols);
+	clean_mas(universe, rows, cols);
+	return EXIT_SUCCESS;
+}
